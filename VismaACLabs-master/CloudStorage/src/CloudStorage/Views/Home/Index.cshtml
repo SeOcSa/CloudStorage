@@ -1,0 +1,50 @@
+﻿@model HomePageViewModel
+
+@{
+    ViewBag.Title = "Home";
+}
+<div class="page-header">
+    <h1>Welcome, here are your files</h1>
+</div>
+
+<environment names="Development">
+    <div class="alert alert-success">
+        <p>We are debugging!</p>
+    </div>
+</environment>
+
+<form asp-action="Index" method="get">
+    <div class="form-group">
+        <label asp-for="Query" class="control-label"></label>
+        <input asp-for="Query" class="form-control" placeholder="Search in file names. Hit enter to search." autofocus />
+        <input type="submit" value="Find" class="btn btn-default" id="find-button" />
+    </div>
+</form>
+
+
+<form method="get" id="FilterID">
+    <div class="btn-group form-group">
+        <button type="button" class="btn dropdown-toggle btn-primary" data-toggle="dropdown" id="btnFilter">
+            <span class="glyphicon glyphicon-filter">   Filter</span>
+        </button>
+        <ul class="dropdown-menu" id="dropdownFilterID">
+            <li><a asp-action="Filter" asp-route-query="Ascending By Name">Ascending By Name</a></li>
+            <li><a asp-action="Filter" asp-route-query="Descending By Name">Descending By Name</a></li>
+            <li><a asp-action="Filter" asp-route-query="Ascending By Size"> Ascending By Size</a></li>
+            <li><a asp-action="Filter" asp-route-query="Descending By Size">Descending By Size</a></li>
+            <li><a asp-action="Filter" asp-route-query="Ascending By ContentType"> Ascending By ContentType</a></li>
+            <li><a asp-action="Filter" asp-route-query="Descending By ContentType"> Descending By ContentType</a></li>
+        </ul>
+    </div>
+    <div class="btn-group form-group" method="get">
+        <button asp-action="MyUploadedFiles" class="btn btn-primary">
+            <span class="glyphicon glyphicon-heart-empty" aria-hidden="true"></span> My uploaded files
+        </button>
+    </div>
+</form>
+
+@Html.Partial("_IndexSummary")
+
+<div class="row">
+    <a asp-action="Upload" class="btn btn-info btn-lg btn-block" id="upload-file">Upload</a>
+</div>

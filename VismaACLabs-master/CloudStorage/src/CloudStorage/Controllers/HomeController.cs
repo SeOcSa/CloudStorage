@@ -1,0 +1,298 @@
+﻿using System;
+using System.Linq;
+using System.Threading.Tasks;
+using CloudStorage.Hubs;
+using CloudStorage.Services;
+using CloudStorage.ViewModels;
+using Core.Constants;
+using Core.Entities;
+using Core.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR.Infrastructure;
+using Microsoft.Extensions.Logging;
+using CloudStorage.Helpers;
+
+// For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+
+namespace CloudStorage.Controllers
+{
+    [Authorize]
+    public class HomeController : BaseController
+    {
+        private readonly IBlobService _blobService;
+        private readonly IConnectionManager _connectionManager;
+        private readonly IFileData _fileData;
+        private readonly IGreeter _greeter;
+        private ILogger<HomeController> _logger;
+
+        public HomeController(IFileData fileData, IGreeter greeter, ILogger<HomeController> logger,
+            IBlobService blobService,
+            UserManager<User> userManager, IConnectionManager connectionManager) : base(userManager)
+        {
+            _fileData = fileData;
+            _greeter = greeter;
+            _logger = logger;
+            _blobService = blobService;
+            _connectionManager = connectionManager;
+        }
+
+        // GET: /<controller>/
+        public IActionResult Index(string query = null)
+        {
+            var model = new HomePageViewModel
+            { 
+                FileInfos = string.IsNullOrWhiteSpace(query) ?
+                    _fileData.GetAll(GetNonAdminUserCompanyId()) : 
+                    _fileData.Search(query),
+                Message = _greeter.GetGreeting(),
+                Query = query
+            };
+
+            return View(model);
+        }
+
+        public async Task<IActionResult> Details(Guid id)
+        {
+            var tempfileInfo = _fileData.Get(id);
+
+            var model = new DetailsViewModel
+            {
+                fileInfo = tempfileInfo,
+                photoUrl= await _blobService.GetTemporaryUrl(tempfileInfo.ContainerName, tempfileInfo.FileName)
+            };
+
+            if (model == null)
+                return RedirectToAction(nameof(Index));
+
+            var companyId = GetNonAdminUserCompanyId();
+            if (!companyId.IsNullOrWhiteSpace() && !model.fileInfo.ContainerName.Equals(companyId, StringComparison.OrdinalIgnoreCase))
+            {
+                return RedirectToAction(nameof(AccountController.AccessDenied), nameof(AccountController).GetControllerName(),
+                    new { returnUrl = Request.Path });
+            }
+
+            return View(model);
+        }
+
+        [HttpGet]
+        public IActionResult Upload()
+        {
+            return View();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Upload(UploadViewModel model)
+        {
+            if ((model != null) && ModelState.IsValid)
+            {
+                var user = await GetLoggedInUser();
+                var containerName = user.CompanyId.ToString().ToLower();
+                await _blobService.CreateContainerIfNotExists(containerName);
+
+                if ((model.UploadedFile != null) && (model.UploadedFile.Count > 0))
+                {
+                    foreach (var uploadedFile in model.UploadedFile)
+                    {
+                        using (var fileStream = uploadedFile.OpenReadStream())
+                        {
+                            await
+                                _blobService.UploadBlobFromStream(containerName, uploadedFile.FileName, fileStream,
+                                    uploadedFile.ContentType, false);
+                        }
+                        var file = new FileInfo
+                        {
+                            ContentType = model.ContentType,
+                            FileName = uploadedFile.FileName,
+                            FileContentType = uploadedFile.ContentType,
+                            FileSizeInBytes = uploadedFile.Length,
+                            ContainerName = containerName,
+                            Description = model.Description,
+                            ReadOnly = model.ReadOnly,
+                            Owner = user.UserName
+                        };
+
+                        _fileData.Add(file);
+                        _fileData.Commit();
+
+                        SendFileNotification(FileOperations.Uploaded, uploadedFile.FileName, user.CompanyId.ToString());
+                    }
+                    
+                }
+            }
+            return RedirectToAction(nameof(Index));
+        }
+
+        [HttpGet]
+        public IActionResult Edit(Guid id)
+        {
+            var model = _fileData.Get(id);
+            if (model == null)
+                return RedirectToAction(nameof(Index));
+
+            var companyId = GetNonAdminUserCompanyId();
+            if (!companyId.IsNullOrWhiteSpace() && !model.ContainerName.Equals(companyId, StringComparison.OrdinalIgnoreCase) || model.ReadOnly)
+            {
+                return RedirectToAction(nameof(AccountController.AccessDenied), nameof(AccountController).GetControllerName(),
+                    new { returnUrl = Request.Path });
+            }
+
+            return View(model);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult Edit(Guid id, UploadViewModel model)
+        {
+            var fileInfo = _fileData.Get(id);
+
+            var companyId = GetNonAdminUserCompanyId();
+            if (!companyId.IsNullOrWhiteSpace() && !fileInfo.ContainerName.Equals(companyId, StringComparison.OrdinalIgnoreCase)
+                || fileInfo.ReadOnly)
+            {
+                return RedirectToAction(nameof(AccountController.AccessDenied), nameof(AccountController).GetControllerName(),
+                    new { returnUrl = Request.Path });
+            }
+
+            if (ModelState.IsValid)
+            {
+                fileInfo.Description = model.Description;
+                fileInfo.ContentType = model.ContentType;
+                fileInfo.ReadOnly = model.ReadOnly;
+                _fileData.Commit();
+
+                SendFileNotification(FileOperations.ModifiedMetadata, fileInfo.FileName,
+                    User.Claims.FirstOrDefault(_ => _.Type.Equals(AuthConstants.CompanyClaim)).Value);
+
+                return RedirectToAction(nameof(Details), new {id = fileInfo.Id});
+            }
+
+            return View(fileInfo);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> TotalCompanyFilesSize()
+        {
+            var user = await GetLoggedInUser();
+            var size = await _blobService.GetContainerSize(user.CompanyId.ToString());
+
+            return View(size);
+        }
+
+        [HttpGet]
+        public async Task<FileResult> Download(Guid id)
+        {
+            var fileInfo = _fileData.Get(id);
+            if (fileInfo != null)
+            {
+                var companyId = GetNonAdminUserCompanyId();
+                if (!companyId.IsNullOrWhiteSpace() && !fileInfo.ContainerName.Equals(companyId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return null;
+                }
+
+                var stream = await _blobService.GetBlobStream(fileInfo.ContainerName, fileInfo.FileName);
+                return File(stream, fileInfo.FileContentType, fileInfo.FileName);
+            }
+            return null;
+        }
+
+        [HttpGet]
+        public IActionResult Delete(Guid id)
+        {
+            var file = _fileData.Get(id);
+
+            if (file == null)
+            {
+                return RedirectToAction(nameof(Index));
+            }
+
+            var companyId = GetNonAdminUserCompanyId();
+            if (!companyId.IsNullOrWhiteSpace() && (string.IsNullOrWhiteSpace(file.ContainerName) || 
+                !file.ContainerName.Equals(companyId, StringComparison.OrdinalIgnoreCase))
+                || file.ReadOnly)
+            {
+                return RedirectToAction(nameof(AccountController.AccessDenied), nameof(AccountController).GetControllerName(),
+                    new { returnUrl = Request.Path });
+            }
+
+            return View(file);
+        }
+
+        [ActionName("Delete")]
+        [HttpPost]
+        public async Task<IActionResult> DeleteConfirm(Guid id)
+        {
+            var file = _fileData.Get(id);
+            if (file != null)
+            {
+                var companyId = GetNonAdminUserCompanyId();
+                if (!companyId.IsNullOrWhiteSpace() && !file.ContainerName.Equals(companyId, StringComparison.OrdinalIgnoreCase)
+                    || file.ReadOnly)
+                {
+                    return RedirectToAction(nameof(AccountController.AccessDenied), nameof(AccountController).GetControllerName(),
+                        new { returnUrl = Request.Path });
+                }
+
+                if (!string.IsNullOrWhiteSpace(file.ContainerName) && !string.IsNullOrWhiteSpace(file.FileName))
+                {
+                    try
+                    {
+                        await _blobService.DeleteBlob(file.ContainerName, file.FileName);
+                    }
+                    catch (ArgumentException)
+                    {
+                        // no container, fine because it's probably seed data
+                    }
+                }
+
+                _fileData.Delete(file);
+                _fileData.Commit();
+                SendFileNotification(FileOperations.Deleted, file.FileName,
+                    User.Claims.FirstOrDefault(_ => _.Type.Equals(AuthConstants.CompanyClaim)).Value);
+            }
+
+            return RedirectToAction(nameof(Index));
+        }
+
+        [HttpGet]
+        public IActionResult Filter(string query,string companyId=null)
+        {
+            companyId = GetNonAdminUserCompanyId();
+
+            var model = new HomePageViewModel
+            {
+                FileInfos = !string.IsNullOrEmpty(query) ? _fileData.FilterBy(query,companyId) : _fileData.GetAll(companyId),
+                Query = string.Empty,
+                Message = _greeter.GetGreeting()
+            };
+
+            return View(nameof(Index), model);
+        }
+        [HttpGet]
+        public async Task<IActionResult> MyUploadedFiles(string companyId=null)
+        {
+            var user = await GetLoggedInUser();
+            companyId = GetNonAdminUserCompanyId();
+
+            var model = new HomePageViewModel
+            {
+                FileInfos = _fileData.GetOwnerFiles(user.UserName,companyId),
+                Query = string.Empty,
+                Message = string.Empty
+            };
+
+            return View(model);
+        }
+        private void SendFileNotification(string operation, string fileName, string companyId)
+        {
+            var hubContext = _connectionManager.GetHubContext<FileOperationsHub>();
+
+            hubContext.Clients.Group(companyId /*, Context.ConnectionId" */)
+                .fileModified(
+                    $"{User.Identity.Name} executed the following operation {operation} on the following file: {fileName}");
+        }
+    }
+}

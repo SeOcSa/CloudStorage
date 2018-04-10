@@ -1,0 +1,18 @@
+﻿@model HomePageViewModel
+
+<div class="row">
+    @if (Model.FileInfos != null && Model.FileInfos.Any())
+    {
+        <div>
+            @foreach (var fileInfo in Model.FileInfos)
+            {
+                @Html.Partial("_Summary", fileInfo)
+            }
+        </div>
+    }
+</div>
+
+@section scripts{
+    <script type="text/javascript" src="/signalr/hubs"></script>
+    <script type="text/javascript" src="~/js/IndexSignalR.js"></script>
+}

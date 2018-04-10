@@ -1,0 +1,95 @@
+﻿<!DOCTYPE html>
+
+<html>
+<head>
+    <meta name="viewport" content="width=device-width" />
+    <title>@ViewBag.Title</title>
+
+    <environment names="Development">
+        <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.css" />
+        <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap-theme.css" />
+        @*<link rel="stylesheet" href="~/lib/gentelella/build/css/custom.css" />*@
+        <link rel="stylesheet" href="~/css/site.css" />
+    </environment>
+    <environment names="Staging, Production">
+        <link rel="stylesheet" href="https://ajax.aspnetcdn.com/ajax/bootstrap/3.3.7/css/bootstrap.min.css"
+              asp-fallback-href="~/lib/bootstrap/dist/css/bootstrap.min.css"
+              asp-fallback-test-class="sr-only" asp-fallback-test-property="position" asp-fallback-test-value="absolute" />
+        @*<link rel="stylesheet" href="http://ajax.aspnetcdn.com/ajax/bootstrap/3.3.7/css/bootstrap-theme.min.css"
+            asp-fallback-href="~/lib/bootstrap/dist/css/bootstrap-theme.min.css"/>*@
+
+        <link rel="stylesheet" href="~/lib/gentelella/build/css/custom.css" />
+
+
+        @*<link rel="stylesheet" href="~/css/site.min.css" asp-append-version="true"/>*@
+    </environment>
+
+</head>
+<body>
+    <nav class="navbar navbar-default navbar-fixed-top navbar-inverse">
+        <div class="container">
+            <div class="navbar-header">
+                <a class="navbar-brand" href="/">Cloud Storage</a>
+            </div>
+
+            <ul class="nav navbar-nav">
+                <li>
+                    <a asp-controller="Company" asp-action="Index">Companies</a>
+                </li>
+                <li>
+                    <a asp-controller="Home" asp-action="TotalCompanyFilesSize">Usage</a>
+                </li>
+            </ul>
+
+            @await Component.InvokeAsync("LoginLogout")
+
+        </div>
+    </nav>
+
+    <div class="container" id="notifications"></div>
+
+    <div class="container" id="main-container">
+        @RenderBody()
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            @await Component.InvokeAsync("Greeting")
+            <p class="text-center text-muted">&copy; Emil Craciun @DateTime.Now.Year</p>
+        </div>
+    </footer>
+
+
+    <!-- https://asp.net/ajax/cdn -->
+    <environment names="Development">
+        <script type="text/javascript" src="~/lib/jquery/dist/jquery.js"></script>
+        <script type="text/javascript" src="~/lib/bootstrap/dist/js/bootstrap.js"></script>
+        <script type="text/javascript" src="~/lib/jquery-validation/dist/jquery.validate.js"></script>
+        <script type="text/javascript" src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.js"></script>
+        <script type="text/javascript" src="~/lib/signalr/jquery.signalR.js"></script>
+        @*<script type="text/javascript" src="~/lib/gentelella/build/js/custom.js"></script>*@
+    </environment>
+    <environment names="Staging, Production">
+        <script type="text/javascript" src="http://ajax.aspnetcdn.com/ajax/jQuery/jquery-3.1.1.min.js"
+                asp-fallback-test="window.jQuery"
+                asp-fallback-src="~/lib/jquery/dist/jquery.js"></script>
+        <script type="text/javascript" src="http://ajax.aspnetcdn.com/ajax/bootstrap/3.3.7/bootstrap.min.js"
+                asp-fallback-test="window.jQuery && window.jQuery.fn && window.jQuery.fn.modal"
+                asp-fallback-src="~/lib/bootstrap/dist/js/bootstrap.js"></script>
+        <script type="text/javascript" src="http://ajax.aspnetcdn.com/ajax/jquery.validate/1.16.0/jquery.validate.min.js"
+                asp-fallback-test="window.jQuery && window.jQuery.validation"
+                asp-fallback-src="~/lib/jquery-validation/dist/jquery.validate.js"></script>
+        <script type="text/javascript" src="http://ajax.aspnetcdn.com/ajax/mvc/5.2.3/jquery.validate.unobtrusive.min.js"
+                asp-fallback-test="window.jQuery && window.jQuery.validation && window.jQuery.validation.unobtrusive"
+                asp-fallback-src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.js"></script>
+        <script type="text/javascript" src="http://ajax.aspnetcdn.com/ajax/signalr/jquery.signalr-2.2.1.min.js"
+                asp-fallback-test="window.jQuery"
+                asp-fallback-src="~/lib/signalr/jquery.signalR.js"></script>
+
+        @*<script type="text/javascript" src="~/lib/gentelella/build/js/custom.js"></script>*@
+
+    </environment>
+
+    @RenderSection("scripts", false)
+</body>
+</html>

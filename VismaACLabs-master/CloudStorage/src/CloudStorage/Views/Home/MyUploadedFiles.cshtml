@@ -1,0 +1,21 @@
+﻿@model HomePageViewModel
+
+@{
+    ViewBag.Title = "My uploaded files";
+}
+
+
+<div class="page-header">
+    <h1>@Model.FileInfos.First().Owner uploaded files</h1>
+</div>
+
+
+@Html.Partial("_IndexSummary")
+
+<form class="form-group">
+    <div class="btn-group">
+        <a asp-action="@nameof(HomeController.Index)" class="btn btn-block btn-primary">
+            <span class="glyphicon glyphicon-home"> Home</span>
+        </a>
+    </div>
+</form>
